@@ -1,0 +1,10 @@
+service_name: action_service
+device: cpu
+log_level: INFO
+
+policy:
+  type: mlp_chunk
+  input_dim: 1280 # 1024 (perception) + 256 (task) roughly + robot state
+  action_dim: 7 # 6 joints + gripper
+  horizon: 10
+  control_mode: position

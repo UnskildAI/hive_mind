@@ -1,0 +1,12 @@
+service_name: task_service
+device: cpu
+log_level: INFO
+
+model:
+  type: simple_mlp
+  perception_dim: 1024  # 16 tokens * 64 dim from perception
+  output_dim: 256
+  smoothing_alpha: 0.7  # For temporal smoothing
+
+caching:
+  ttl_seconds: 0.5 # 2 Hz limit implication

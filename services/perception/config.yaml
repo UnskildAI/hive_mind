@@ -1,0 +1,9 @@
+service_name: perception_service
+device: cpu
+log_level: INFO
+
+model:
+  type: simple_cnn
+  input_shape: [3, 224, 224]
+  output_dim: 64
+  num_tokens: 16

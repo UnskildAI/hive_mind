@@ -1,0 +1,7 @@
+service_name: perception
+device: cuda
+
+model:
+  type: vit_scene_encoder
+  checkpoint: checkpoints/vit.pth
+  image_size: 224

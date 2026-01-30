@@ -1,0 +1,47 @@
+services:
+  perception:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: uvicorn services.perception.app:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - LOG_LEVEL=INFO
+      
+  task:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: uvicorn services.task.app:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+    environment:
+      - LOG_LEVEL=INFO
+
+  action:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: uvicorn services.action.app:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"
+    environment:
+      - LOG_LEVEL=INFO
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: uvicorn services.pipeline.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - PERCEPTION_URL=http://perception:8001
+      - TASK_URL=http://task:8002
+      - ACTION_URL=http://action:8003
+      - LOG_LEVEL=INFO
+    depends_on:
+      - perception
+      - task
+      - action
