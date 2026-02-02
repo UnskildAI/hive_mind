@@ -94,10 +94,8 @@ class OpenVLAProvider(VLMProviderBase):
         )
         
         try:
-            # Import transformers models
             from transformers import AutoModelForVision2Seq, AutoProcessor
             
-            # Load model with device mapping and precision
             logger.info(f"Loading model with device_map={device_map}, dtype={torch_dtype}")
             
             self.model = AutoModelForVision2Seq.from_pretrained(
@@ -105,6 +103,7 @@ class OpenVLAProvider(VLMProviderBase):
                 device_map=device_map,
                 torch_dtype=torch_dtype,
                 trust_remote_code=True,  # OpenVLA may require custom code
+                attn_implementation="eager",  # Avoid SDPA compatibility issues
             )
             
             # Load processor

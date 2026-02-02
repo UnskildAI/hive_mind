@@ -81,6 +81,7 @@ class PaliGemmaProvider(VLMProviderBase):
                 device_map=device_map,
                 torch_dtype=torch_dtype,
                 trust_remote_code=True,
+                attn_implementation="eager",  # Avoid SDPA compatibility issues
             )
             
             self.processor = AutoProcessor.from_pretrained(

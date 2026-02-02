@@ -7,7 +7,7 @@ vlm:
   
   checkpoint:
     source: "huggingface"  # Options: huggingface, local
-    repo_id: "openvla/openvla-7b"  # HuggingFace Hub ID
+    repo_id: "google/paligemma-3b-pt-224"  # HuggingFace Hub ID for PaliGemma
     local_path: null  # Or: /path/to/local/checkpoint
     revision: "main"  # Git revision (branch, tag, or commit)
   
