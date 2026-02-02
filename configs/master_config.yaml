@@ -3,7 +3,7 @@
 
 # VLM Provider Selection
 vlm:
-  provider: "openvla"  # Options: openvla, paligemma, gemini, gr00t, simple_mlp (legacy)
+  provider: "paligemma"  # Options: openvla, paligemma, gemini, gr00t, simple_mlp (legacy)
   
   checkpoint:
     source: "huggingface"  # Options: huggingface, local
