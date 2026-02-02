@@ -36,9 +36,18 @@ def create_mock_perception() -> PerceptionState:
     # Create dummy scene tokens (16 tokens x 64 dim)
     scene_tokens = np.random.randn(16, 64).tolist()
     
+    # Create dummy camera pose (4x4 transformation matrix)
+    camera_pose = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.5],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+    
     return PerceptionState(
         schema_version="1.0.0",
         scene_tokens=scene_tokens,
+        camera_pose=camera_pose,
         raw_image=dummy_image,
         timestamp=0.0
     )
