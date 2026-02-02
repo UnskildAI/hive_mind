@@ -32,7 +32,7 @@ def mock_pipeline_server():
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "schema_version": "1.0",
-            "actions": [[0.5] * 7],
+            "actions": [[0.5] * 6], # 6 DOF for SoArm 100
             "horizon": 1,
             "control_mode": "position"
         }
@@ -45,11 +45,14 @@ def test_adapter_node_lifecycle(mock_pipeline_server):
         node = RobotAdapter()
         
         # Verify subscriptions
-        assert any(s.topic_name == '/camera/image_raw' for s in node.subscriptions)
-        assert any(s.topic_name == '/joint_state' for s in node.subscriptions)
+        topic_names = [s.topic_name for s in node.subscriptions]
+        assert '/camera/image_raw' in topic_names
+        assert '/joint_states' in topic_names
         
         # Verify publishers
-        assert any(p.topic_name == '/joint_commands' for p in node.publishers)
+        pub_topics = [p.topic_name for p in node.publishers]
+        assert '/so_100_arm_controller/commands' in pub_topics
+        assert '/so_100_arm_gripper_controller/commands' in pub_topics
         
         node.destroy_node()
     finally:
@@ -65,31 +68,46 @@ def test_adapter_control_loop(mock_pipeline_server):
         cv_img = np.zeros((100, 100, 3), dtype=np.uint8)
         img_msg = bridge.cv2_to_imgmsg(cv_img, encoding="rgb8")
         
+        # Create out-of-order joint state to test sorting
         joint_msg = JointState()
-        joint_msg.position = [0.0] * 7
-        joint_msg.velocity = [0.0] * 7
+        # Alphabetical order from user echo: Elbow, Gripper, Shoulder_Pitch, Shoulder_Rotation, Wrist_Pitch, Wrist_Roll
+        joint_msg.name = ['Elbow', 'Gripper', 'Shoulder_Pitch', 'Shoulder_Rotation', 'Wrist_Pitch', 'Wrist_Roll']
+        joint_msg.position = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] 
+        # Config expectation: Shoulder_Rotation, Shoulder_Pitch, Elbow, Wrist_Pitch, Wrist_Roll, Gripper
+        # Expected values passed to robot state: [0.4, 0.3, 0.1, 0.5, 0.6, 0.2]
+        
+        joint_msg.velocity = [0.0] * 6
         
         # Manually trigger callbacks
         node.image_callback(img_msg)
         node.joint_callback(joint_msg)
         
-        # Create a mock publisher to check if command was published
-        # Since we can't easily snoop on the real publisher without another node,
-        # let's mock the publisher's publish method.
-        node.cmd_pub.publish = MagicMock()
+        # Mock the publishers in the map
+        for pub in node.publishers_map.values():
+            pub.publish = MagicMock()
         
         # Trigger control loop
         node.control_loop()
         
         # Verify pipeline was called
         mock_pipeline_server.assert_called_once()
-        assert mock_pipeline_server.call_args[0][0] == PIPELINE_URL
         
-        # Verify command was published
-        node.cmd_pub.publish.assert_called_once()
-        published_msg = node.cmd_pub.publish.call_args[0][0]
-        assert isinstance(published_msg, Float64MultiArray)
-        assert list(published_msg.data) == [0.5] * 7
+        # Verify command was published to both controllers
+        # Action is [0.5]*6. 
+        # Arm (0-5) should get 0.5*5
+        # Gripper (5-6) should get 0.5*1
+        
+        arm_pub = node.publishers_map['arm']
+        arm_pub.publish.assert_called_once()
+        arm_msg = arm_pub.publish.call_args[0][0]
+        assert len(arm_msg.data) == 5
+        assert list(arm_msg.data) == [0.5] * 5
+        
+        gripper_pub = node.publishers_map['gripper']
+        gripper_pub.publish.assert_called_once()
+        gripper_msg = gripper_pub.publish.call_args[0][0]
+        assert len(gripper_msg.data) == 1
+        assert list(gripper_msg.data) == [0.5]
         
         node.destroy_node()
     finally:

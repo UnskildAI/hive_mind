@@ -6,7 +6,8 @@ model:
   type: simple_mlp
   perception_dim: 1024  # 16 tokens * 64 dim from perception
   output_dim: 256
-  smoothing_alpha: 0.7  # For temporal smoothing
+  smoothing_alpha: 0.8  # Aggressive temporal smoothing
+  subtask_change_threshold: 0.1 # Minimum embedding delta to trigger subtask ID change
 
 caching:
-  ttl_seconds: 0.5 # 2 Hz limit implication
+  ttl_seconds: 1.0 # 1 Hz limit strictly enforced

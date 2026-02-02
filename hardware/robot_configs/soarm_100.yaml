@@ -1,0 +1,84 @@
+# SoArm 100 Robot Configuration
+
+robot_name: "SoArm 100"
+manufacturer: "Hiwonder"
+model: "SO-ARM100"
+
+# Degrees of Freedom
+dof: 6  # 5 arm joints + 1 gripper
+
+# Joint Configuration
+joints:
+  - name: "shoulder_rotation"
+    index: 0
+    type: "revolute"
+    limits: [-3.14, 3.14]  # radians
+    max_velocity: 1.0  # rad/s
+    max_effort: 10.0  # Nm
+    
+  - name: "shoulder_pitch"
+    index: 1
+    type: "revolute"
+    limits: [-1.57, 1.57]
+    max_velocity: 1.0
+    max_effort: 10.0
+    
+  - name: "elbow"
+    index: 2
+    type: "revolute"
+    limits: [-1.57, 1.57]
+    max_velocity: 1.0
+    max_effort: 8.0
+    
+  - name: "wrist_pitch"
+    index: 3
+    type: "revolute"
+    limits: [-1.57, 1.57]
+    max_velocity: 1.5
+    max_effort: 5.0
+    
+  - name: "wrist_roll"
+    index: 4
+    type: "revolute"
+    limits: [-3.14, 3.14]
+    max_velocity: 1.5
+    max_effort: 5.0
+    
+  - name: "gripper"
+    index: 5
+    type: "prismatic"
+    limits: [0.0, 1.0]  # 0=closed, 1=open
+    max_velocity: 0.5
+    max_effort: 2.0
+
+# Control Configuration
+control:
+  mode: "position"  # Options: position, velocity, effort
+  frequency: 20  # Hz
+  interpolation: "linear"
+
+# Safety Limits
+safety:
+  enabled: true
+  joint_position_tolerance: 0.1  # radians
+  joint_velocity_limit_scale: 0.8  # 80% of max velocity
+  emergency_stop_deceleration: 2.0  # rad/s^2
+
+# Action Scaling
+# Maps normalized actions [-1, 1] to joint limits
+action_scaling:
+  enabled: true
+  method: "symmetric"  # symmetric around current position
+
+# Workspace Limits (Cartesian)
+workspace:
+  x_limits: [-0.3, 0.3]  # meters
+  y_limits: [-0.3, 0.3]
+  z_limits: [0.0, 0.4]
+
+# ROS2 Configuration
+ros2:
+  namespace: "/soarm_100"
+  controller_name: "joint_trajectory_controller"
+  state_topic: "/joint_states"
+  command_topic: "/joint_trajectory"

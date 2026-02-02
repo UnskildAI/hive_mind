@@ -1,0 +1,78 @@
+# Master Configuration for VLA System
+# Single source of truth for VLM, Action Expert, and Robot selection
+
+# VLM Provider Selection
+vlm:
+  provider: "openvla"  # Options: openvla, paligemma, gemini, gr00t, simple_mlp (legacy)
+  
+  checkpoint:
+    source: "huggingface"  # Options: huggingface, local
+    repo_id: "openvla/openvla-7b"  # HuggingFace Hub ID
+    local_path: null  # Or: /path/to/local/checkpoint
+    revision: "main"  # Git revision (branch, tag, or commit)
+  
+  # GPU Configuration
+  device_map: "auto"  # Options: auto, balanced, sequential, or custom dict
+  precision: "fp16"  # Options: fp32, fp16, bf16, int8
+  
+  # Model-specific settings
+  max_length: 512  # Max sequence length for tokenization
+  temperature: 0.7  # Sampling temperature (if applicable)
+
+# Action Expert Selection
+action_expert:
+  provider: "act"  # Options: act, diffusion, pi0, pi0_fast, scripted (legacy), frozen_policy (legacy)
+  
+  checkpoint:
+    source: "huggingface"
+    repo_id: "lerobot/act_aloha_sim_insertion_human"  # Example ACT checkpoint
+    local_path: null
+    revision: "main"
+  
+  # GPU Configuration
+  device: "cuda:1"  # Dedicated GPU for action inference
+  precision: "fp16"
+  
+  # Policy-specific settings
+  horizon: 50  # Action chunk size (number of future steps)
+  control_mode: "position"  # Options: position, velocity, torque
+  temporal_ensemble: false  # Use temporal ensembling for smoothness
+
+# Robot Configuration
+robot:
+  type: "soarm_100"  # Options: soarm_100, soarm_101, ur5e, franka
+  config_path: "hardware/robot_configs/soarm_100.yaml"
+  
+  # Control settings
+  control_frequency: 20  # Hz
+  safety_limits_enabled: true
+  action_scaling: true  # Normalize actions to robot-specific ranges
+
+# Hardware Configuration
+hardware:
+  gpus: [0, 1]  # Available GPU IDs
+  max_memory_per_gpu: "22GB"  # A5000 limit (leave 2GB for system)
+  enable_tf32: true  # TF32 acceleration on Ampere GPUs
+  enable_cudnn_benchmark: true  # cuDNN autotuner
+
+# Inference Settings
+inference:
+  vlm_frequency: 1  # Hz (task latent update rate)
+  action_frequency: 20  # Hz (action command rate)
+  perception_frequency: 10  # Hz (perception update rate)
+  
+  # Latency targets (ms)
+  target_vlm_latency: 100
+  target_action_latency: 50
+  target_e2e_latency: 150
+
+# Logging and Monitoring
+logging:
+  enabled: true
+  log_dir: "data/logs"
+  log_level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+  
+  # Performance monitoring
+  monitor_latency: true
+  monitor_gpu_memory: true
+  log_frequency: 100  # Log stats every N iterations

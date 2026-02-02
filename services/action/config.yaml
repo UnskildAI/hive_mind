@@ -2,9 +2,24 @@ service_name: action_service
 device: cpu
 log_level: INFO
 
+mode: frozen_policy  # "scripted", "learned", or "frozen_policy"
+
+scripted:
+  trajectory_type: joint_oscillation  # "joint_oscillation", "square", "gripper_toggle"
+  frequency: 0.5  # Hz for oscillation
+  amplitude: 0.1  # radians for joint motion
+  joint_limits: [-3.14, 3.14]  # radians
+  velocity_limit: 1.0  # rad/s
+
+frozen_policy:
+  # Target pose in kinematic order [Shoulder_Rotation, Shoulder_Pitch, Elbow, Wrist_Pitch, Wrist_Roll, Gripper]
+  target_pose: [0.0, -0.5, 0.5, 0.0, 0.0, 0.0]
+  # Interpolation factor (0.0 to 1.0) per step. Higher is faster/more jerky.
+  smoothing: 0.05
+
 policy:
   type: mlp_chunk
   input_dim: 1280 # 1024 (perception) + 256 (task) roughly + robot state
-  action_dim: 7 # 6 joints + gripper
-  horizon: 10
+  action_dim: 6 # SoArm 100: 5 arm joints + 1 gripper
+  horizon: 1
   control_mode: position

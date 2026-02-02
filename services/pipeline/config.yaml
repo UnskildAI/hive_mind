@@ -1,0 +1,12 @@
+# Pipeline Service Configuration
+
+# Logging
+logging:
+  enabled: true
+  log_dir: "/home/mecha/hive_mind/data/logs"
+  chunk_size: 1000  # Number of steps per chunk
+  save_images: true
+
+# Orchestrator
+orchestrator:
+  task_ttl: 1.0  # Align with Task Service 1Hz limit

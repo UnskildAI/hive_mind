@@ -4,7 +4,7 @@ import time
 import logging
 from common.schemas.perception import PerceptionState
 from common.schemas.task import TaskLatent
-from services.task.model import TaskModel
+from services.task.model import TaskModelFactory
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,8 +14,8 @@ app = FastAPI()
 
 # Initialize model
 try:
-    model = TaskModel()
-    logger.info("Task model initialized.")
+    model = TaskModelFactory.create()
+    logger.info(f"Task model initialized: {type(model).__name__}")
 except Exception as e:
     logger.error(f"Failed to initialize task model: {e}")
     raise e
@@ -29,19 +29,21 @@ last_execution_time = 0
 last_result: TaskLatent = None
 last_instruction = ""
 
+TTL = model.config.get("caching", {}).get("ttl_seconds", 1.0)
+
 @app.post("/process", response_model=TaskLatent)
 async def process(data: TaskInput):
     global last_execution_time, last_result, last_instruction
     
     current_time = time.time()
     
-    # Simple caching/throttling strategy
-    # If same instruction and request is too soon, return cached
-    # However, if perception changed significantly, we might want to re-run.
-    # For this strict assignment, we'll enforce the 2Hz roughly, 
-    # but allow re-run if > 0.5s OR instruction changed.
+    # Human Override: If instruction changed, bypass TTL
+    instruction_changed = (data.instruction != last_instruction)
     
-    if (data.instruction == last_instruction) and (current_time - last_execution_time < 0.5) and (last_result is not None):
+    # Strict 1Hz / TTL enforcement
+    is_too_soon = (current_time - last_execution_time < TTL)
+    
+    if is_too_soon and not instruction_changed and (last_result is not None):
         return last_result
 
     try:

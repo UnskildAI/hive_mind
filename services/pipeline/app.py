@@ -13,8 +13,8 @@ app = FastAPI()
 
 # Service URLs from env or default (localhost for docker compose)
 PERCEPTION_URL = os.getenv("PERCEPTION_URL", "http://localhost:8001")
-TASK_URL = os.getenv("TASK_URL", "http://localhost:8002")
-ACTION_URL = os.getenv("ACTION_URL", "http://localhost:8003")
+TASK_URL = os.getenv("TASK_URL", "http://localhost:8003")
+ACTION_URL = os.getenv("ACTION_URL", "http://localhost:8002")
 
 orchestrator = PipelineOrchestrator(PERCEPTION_URL, TASK_URL, ACTION_URL)
 

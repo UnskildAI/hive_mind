@@ -15,6 +15,16 @@ dependencies = [
     "uvicorn>=0.23.0",
     "numpy>=1.24.0",
     "pillow>=10.0.0",
+    # VLA Model Dependencies
+    "transformers>=4.40.0",      # HuggingFace models (OpenVLA, PaliGemma)
+    "huggingface-hub>=0.23.0",   # Checkpoint management
+    "lerobot>=0.4.0",            # ACT, Diffusion, Pi0 policies
+    "diffusers>=0.27.0",         # Diffusion models
+    "accelerate>=0.30.0",        # Multi-GPU, mixed precision
+    "safetensors>=0.4.0",        # Fast checkpoint loading
+    "einops>=0.7.0",             # Tensor operations
+    "sentencepiece>=0.2.0",      # Tokenization
+    "protobuf>=4.25.0",          # Model serialization
 ]
 
 [build-system]
