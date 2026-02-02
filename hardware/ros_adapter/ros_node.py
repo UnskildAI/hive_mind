@@ -124,14 +124,14 @@ class RobotAdapter(Node):
             # Pipeline expects: image_base64, camera_pose, instruction, robot_state
             payload = {
                 "image_base64": image_base64,
-                "camera_pose": [[0.0] * 6],  # Placeholder camera pose
-                "instruction": "move to target",  # Placeholder instruction
+                "camera_pose": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.5], [0.0, 0.0, 0.0, 1.0]],
+                "instruction": None,  # Let server use the instruction set via /set_instruction
                 "robot_state": robot_state.model_dump()
             }
 
             # Using timeout from config to prevent blocking control loop
             url = self.config.get("pipeline", {}).get("url", PIPELINE_URL)
-            timeout_ms = self.config.get("pipeline", {}).get("timeout_ms", 100)
+            timeout_ms = self.config.get("pipeline", {}).get("timeout_ms", 200) # Increased default
             r = requests.post(url, json=payload, timeout=timeout_ms / 1000.0)
             r.raise_for_status()
             action_chunk = r.json()

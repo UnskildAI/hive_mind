@@ -29,6 +29,32 @@ python scripts/test_vla_inference.py --action act
 python scripts/test_vla_inference.py --vlm openvla --action act
 ```
 
+## 🤖 Real Robot Deployment (SoArm 100)
+
+### 1. Start the VLA Pipeline Server
+This loads the VLM and Action Expert models on your GPUs.
+```bash
+# Terminal 1
+cd /home/mecha/hive_mind
+python services/pipeline/server.py
+```
+
+### 2. Start the ROS Adapter
+Connects the VLA pipeline to your robot's ROS2 topics.
+```bash
+# Terminal 2
+cd /home/mecha/hive_mind
+python hardware/ros_adapter/ros_node.py
+```
+
+### 3. Give the Robot a Task
+Use the helper script to send a natural language command.
+```bash
+# Terminal 3
+cd /home/mecha/hive_mind
+python scripts/set_instruction.py "Pick up the red cube and place it in the blue box"
+```
+
 ---
 
 ## 📝 Switch Models (Zero Code Changes!)
@@ -37,36 +63,28 @@ Edit `configs/master_config.yaml`:
 
 ```yaml
 vlm:
-  provider: "openvla"  # or: paligemma, gemini, simple_mlp
+  provider: "paligemma"  # Recommended for real-time (fastest)
+  # provider: "openvla"   # High accuracy (slowest)
 
 action_expert:
-  provider: "act"  # or: diffusion, pi0, pi0_fast, scripted
+  provider: "act"  # Smooth, chunked actions
+  # provider: "diffusion" # Robust to noise
 ```
 
 ---
 
-## 🤖 Use in Your Code
+## 🔍 Monitoring & Performance
 
-```python
-from services.task.model import TaskModelFactory
-from services.action.factory import ActionExpertFactory
-
-# Load models from config
-vlm = TaskModelFactory.create()
-action_expert = ActionExpertFactory.create()
-
-# Run inference
-task_latent = vlm.infer(perception, instruction)
-action_chunk = action_expert.act(task_latent, perception, robot_state)
+Check state and latency:
+```bash
+curl http://localhost:8000/health
 ```
 
----
-
-## 📚 Full Documentation
-
-- **Walkthrough**: [walkthrough.md](file:///home/mecha/.gemini/antigravity/brain/bf40018a-ff4d-415c-aa3c-93a64be831b6/walkthrough.md)
-- **Architecture**: [architecture_overview.md](file:///home/mecha/.gemini/antigravity/brain/bf40018a-ff4d-415c-aa3c-93a64be831b6/architecture_overview.md)
-- **Implementation Plan**: [implementation_plan.md](file:///home/mecha/.gemini/antigravity/brain/bf40018a-ff4d-415c-aa3c-93a64be831b6/implementation_plan.md)
+| Metric | Target | Notes |
+|--------|--------|-------|
+| VLM Latency | ~100ms | Runs at 1Hz by default |
+| Action Latency | ~20ms | Runs at 20Hz |
+| Total E2E | <150ms | Key for stable control |
 
 ---
 
