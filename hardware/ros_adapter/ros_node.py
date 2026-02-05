@@ -8,6 +8,7 @@ import numpy as np
 
 from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import Float64MultiArray, Bool
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from converters import (
     image_to_perception,
@@ -73,7 +74,7 @@ class RobotAdapter(Node):
         
         for ctrl_name, ctrl_cfg in self.controllers_config.items():
             topic = ctrl_cfg["topic"]
-            self.publishers_map[ctrl_name] = self.create_publisher(Float64MultiArray, topic, 10)
+            self.publishers_map[ctrl_name] = self.create_publisher(JointTrajectory, topic, 10)
             
             # Map valid indices for this controller
             joints = ctrl_cfg["joints"]
@@ -178,11 +179,21 @@ class RobotAdapter(Node):
                     self.get_logger().error(f"Action dim mismatch for {ctrl_name}: {len(current_action)} < {max(indices)}")
                     continue
 
-                cmd_msg = Float64MultiArray()
-                cmd_msg.data = [float(current_action[i]) for i in indices]
+                # Create JointTrajectory message
+                cmd_msg = JointTrajectory()
+                cmd_msg.joint_names = [self.all_joint_names[i] for i in indices]
                 
-                # Check for "Near Zero" movement which might imply model is predicting current state
-                diff = np.abs(np.array(cmd_msg.data) - np.array([current_qpos[i] for i in indices]))
+                point = JointTrajectoryPoint()
+                point.positions = [float(current_action[i]) for i in indices]
+                
+                # Smooth interpolation: Assume 0.1s to reach next point 
+                # (Matches 10Hz control frequency)
+                point.time_from_start.nanosec = 100000000 # 100ms
+                
+                cmd_msg.points = [point]
+                
+                # Check for "Near Zero" movement
+                diff = np.abs(np.array(point.positions) - np.array([current_qpos[i] for i in indices]))
                 if np.mean(diff) < 0.001:
                     # Very small movement, but we publish anyway to keep watchdog happy
                     pass

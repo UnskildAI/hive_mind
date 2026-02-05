@@ -14,18 +14,18 @@ topics:
 # Maps logical groups of joints to specific ROS topics
 controllers:
   arm:
-    topic: /so_100_arm_controller/commands
+    topic: /so_100_arm_controller/joint_trajectory
     # Standard 5 DOF arm joints in Kinematic Order (Base -> Wrist)
     # Assumes: Shoulder_Rotation=Base, Shoulder_Pitch=Shoulder
     # IMPORTANT: The model expects this order.
     joints: [Shoulder_Rotation, Shoulder_Pitch, Elbow, Wrist_Pitch, Wrist_Roll]
-    type: std_msgs/Float64MultiArray
+    type: trajectory_msgs/JointTrajectory
   
   gripper:
-    topic: /so_100_arm_gripper_controller/commands
+    topic: /so_100_arm_gripper_controller/joint_trajectory
     # Gripper joint
     joints: [Gripper]
-    type: std_msgs/Float64MultiArray
+    type: trajectory_msgs/JointTrajectory
 
 # Joint Limit Configuration
 # This list must match the total ordering of [arm_joints + gripper_joints]
