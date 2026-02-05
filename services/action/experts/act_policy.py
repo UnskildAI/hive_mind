@@ -78,37 +78,43 @@ class ACTActionExpert(ActionExpertBase):
         
         try:
             # Import LeRobot ACT policy (0.4.x API)
-            from lerobot.policies.act.modeling_act import ACTPolicy, ACTConfig
+            from lerobot.policies.act.modeling_act import ACTPolicy
             import torch
             
             logger.info(f"Loading ACT from: {checkpoint_path}")
             
-            # Load policy from pretrained checkpoint
-            # In LeRobot 0.4.x, we usually use from_pretrained on the Policy class
-            self.policy = ACTPolicy.from_pretrained(
-                checkpoint_path,
-            )
-            
             # Move to device and set precision
             torch_dtype = self.gpu_manager.get_torch_dtype(self.precision)
-            self.policy.to(device=self.device, dtype=torch_dtype)
+            
+            # Load policy with explicit dtype (HF-style)
+            self.policy = ACTPolicy.from_pretrained(
+                checkpoint_path,
+                torch_dtype=torch_dtype,
+            )
+            
+            # Move to device
+            self.policy.to(self.device)
+            
+            # Additional safety: explicitly force half if precision is fp16
+            if self.precision == "fp16":
+                self.policy.half()
             
             # Set to eval mode
             self.policy.eval()
             
             self.is_loaded = True
             
-            logger.info("ACT policy loaded successfully")
+            logger.info(f"ACT policy loaded successfully in {self.precision}")
             logger.info(f"  Device: {self.device}")
-            logger.info(f"  Horizon: {self.horizon}")
-            logger.info(f"  Control mode: {self.control_mode}")
+            logger.info(f"  Internal Model DType: {next(self.policy.parameters()).dtype}")
         
         except ImportError as e:
             logger.error(f"LeRobot 0.4.3 import error: {e}")
             logger.warning("Attempting alternative import for ACTPolicy...")
             try:
                 from lerobot.policies.act.modeling_act import ACTPolicy
-                self.policy = ACTPolicy.from_pretrained(checkpoint_path)
+                torch_dtype = self.gpu_manager.get_torch_dtype(self.precision)
+                self.policy = ACTPolicy.from_pretrained(checkpoint_path, torch_dtype=torch_dtype)
                 self.policy.to(self.device)
                 self.policy.eval()
                 self.is_loaded = True
@@ -151,15 +157,24 @@ class ACTActionExpert(ActionExpertBase):
             actions_np = np.zeros((self.horizon, len(robot.joint_position)))
         else:
             # Run ACT forward pass
-            with torch.no_grad():
-                # ACT returns action predictions
-                action_pred = self.policy.select_action(observation)
-            
-            # Convert to numpy
-            if isinstance(action_pred, torch.Tensor):
-                actions_np = action_pred.cpu().numpy()
-            else:
-                actions_np = np.array(action_pred)
+            try:
+                # Use autocast to handle any internal dtype mismatches (e.g. noise generation)
+                device_type = "cuda" if "cuda" in str(self.device) else "cpu"
+                model_dtype = next(self.policy.parameters()).dtype
+                
+                with torch.no_grad():
+                    with torch.amp.autocast(device_type=device_type, dtype=model_dtype):
+                        # ACT returns action predictions
+                        action_pred = self.policy.select_action(observation)
+                
+                # Convert to numpy
+                if isinstance(action_pred, torch.Tensor):
+                    actions_np = action_pred.cpu().numpy()
+                else:
+                    actions_np = np.array(action_pred)
+            except Exception as e:
+                logger.error(f"ACT model forward pass failed: {e}")
+                raise
         
         # Ensure correct shape: [horizon, action_dim]
         if actions_np.ndim == 1:
