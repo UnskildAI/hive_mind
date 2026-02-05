@@ -205,21 +205,25 @@ class ACTActionExpert(ActionExpertBase):
         # Determine model precision
         try:
             model_dtype = next(self.policy.parameters()).dtype
+            # Peek at a few parameters to be sure
+            params = list(self.policy.parameters())
+            logger.info(f"Model precision check: param[0]={params[0].dtype}, param[-1]={params[-1].dtype}")
         except (StopIteration, AttributeError):
             model_dtype = torch.float32
+            
+        logger.info(f"ACT model detected dtype: {model_dtype} on device: {self.device}")
             
         # Create standard tensors
         qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
         
         observation = {}
         
-        # Redundant keys for proprioception to avoid KeyErrors or silent defaults
-        # Standard LeRobot/Aloha keys
+        # Redundant keys for proprioception
         observation["observation.state"] = qpos
         observation["state"] = qpos
         observation["qpos"] = qpos
         
-        # Add task embedding as observation key (might be used by latent projector)
+        # Add task embedding
         task_emb = torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
         observation["task_embedding"] = task_emb
         
@@ -236,13 +240,26 @@ class ACTActionExpert(ActionExpertBase):
             
         if hasattr(perception, 'raw_image') and perception.raw_image is not None:
             image_tensor = self._image_to_tensor(perception.raw_image).unsqueeze(0).to(self.device)
+            # Ensure image is float32 before recursive cast
+            image_tensor = image_tensor.float()
             for key in image_keys:
                 observation[key] = image_tensor
         else:
             logger.warning("No image found in perception state for ACT observation")
+            
+        # CRITICAL FIX: Explicitly provide the latent sample to avoid internal Float32 defaults
+        # The latent_dim is usually in self.policy.config.latent_dim
+        latent_dim = getattr(self.policy.config, "latent_dim", 32)
+        bs = 1
+        observation["latent_sample"] = torch.zeros((bs, latent_dim), device=self.device, dtype=model_dtype)
         
-        # FINAL STEP: Forces EVERYTHING in the batch to match the model's device and dtype
+        # FINAL STEP: Recursive cast EVERYTHING to model precision
         observation = self._to_device_and_dtype(observation, self.device, model_dtype)
+        
+        # Deep debug log dtypes
+        for k, v in observation.items():
+            if isinstance(v, torch.Tensor):
+                logger.info(f"Observation Tensor {k}: dtype={v.dtype}, device={v.device}")
         
         return observation
     
