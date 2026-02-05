@@ -32,6 +32,7 @@ class RobotAdapter(Node):
 
         self.latest_image = None
         self.latest_joint = None
+        self.step_count = 0
         
         topics = self.config.get("topics", {})
         self.create_subscription(
@@ -190,7 +191,33 @@ class RobotAdapter(Node):
                 published_any = True
                 
             if published_any:
-                self.get_logger().info(f"Pipeline Step: Latency={latency_ms:.1f}ms, Joints={len(current_action)}, Cmd[0]={current_action[0]:.3f}", throttle_duration_sec=1.0)
+                # SIDE-BY-SIDE TELEMETRY
+                # Compare current_qpos with current_action
+                deltas = []
+                comparison_str = []
+                for i, name in enumerate(self.all_joint_names):
+                    curr = current_qpos[i]
+                    target = current_action[i]
+                    delta = target - curr
+                    deltas.append(abs(delta))
+                    comparison_str.append(f"{name}: {curr:.3f}->{target:.3f} (Δ={delta:.3f})")
+                
+                max_delta = max(deltas) if deltas else 0.0
+                
+                # Log a summary every second
+                self.get_logger().info(f"Pipeline Step: Latency={latency_ms:.1f}ms, Max Δ={max_delta:.4f}")
+                
+                # Log detailed comparison every 5 seconds or if movement is "meaningful"
+                if max_delta > 0.05: # > ~3 degrees
+                    self.get_logger().info("MEANINGFUL MOVEMENT DETECTED:")
+                    for line in comparison_str:
+                        self.get_logger().info(f"  {line}")
+                elif self.step_count % 100 == 0: # Periodic check for static/near-static
+                    self.get_logger().info("STATIONARY/MICRO-MOVEMENT:")
+                    for line in comparison_str:
+                        self.get_logger().info(f"  {line}")
+            
+            self.step_count += 1
 
         except requests.exceptions.Timeout:
             self.get_logger().warn("Pipeline timeout", throttle_duration_sec=2.0)
