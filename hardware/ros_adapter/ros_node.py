@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 import requests
 import time
+import numpy as np
 
 from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import Float64MultiArray, Bool
