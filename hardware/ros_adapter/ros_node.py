@@ -106,7 +106,10 @@ class RobotAdapter(Node):
     def control_loop(self):
         # Strict checking for both sensors
         if self.latest_image is None or self.latest_joint is None:
-            # self.get_logger().info("Waiting for data...", throttle_duration_sec=2.0)
+            if self.latest_image is None:
+                self.get_logger().warn("Waiting for image data...", throttle_duration_sec=5.0)
+            if self.latest_joint is None:
+                self.get_logger().warn("Waiting for joint data...", throttle_duration_sec=5.0)
             return
         
         try:
@@ -120,6 +123,9 @@ class RobotAdapter(Node):
             
             # Pass target names to ensure correct sorting/filtering
             robot_state = jointstate_to_robotstate(self.latest_joint, target_names=self.all_joint_names)
+            
+            current_qpos = robot_state.joint_position
+            # self.get_logger().info(f"Current QPos: {current_qpos}")
 
             # Pipeline expects: image_base64, camera_pose, instruction, robot_state
             payload = {
@@ -131,49 +137,68 @@ class RobotAdapter(Node):
 
             # Using timeout from config to prevent blocking control loop
             url = self.config.get("pipeline", {}).get("url", PIPELINE_URL)
-            timeout_ms = self.config.get("pipeline", {}).get("timeout_ms", 200) # Increased default
+            timeout_ms = self.config.get("pipeline", {}).get("timeout_ms", 1000)
+            
+            start_time = time.time()
             r = requests.post(url, json=payload, timeout=timeout_ms / 1000.0)
+            latency_ms = (time.time() - start_time) * 1000
+            
             r.raise_for_status()
             action_chunk = r.json()
             
-            # Extract the raw action list (assuming horizon 1 for execution or just taking first step)
-            # The ActionChunk schema has 'actions': List[List[float]]
+            # Extract the raw action list
             actions = action_chunk.get("actions", [])
             if not actions:
+                self.get_logger().warn("Received empty actions from pipeline")
                 return
                 
             current_action = actions[0] # [First Step]
+            # self.get_logger().info(f"Model action (first step): {current_action}")
             
             # SAFETY VALIDATION
             is_safe, safe_action, reason = self.safety_validator.validate_command(current_action)
+            
             if not is_safe:
-                self.get_logger().error(f"SAFETY VIOLATION: {reason} - Command blocked")
+                self.get_logger().error(f"CRITICAL SAFETY BLOCK: {reason}")
                 return
             
             if reason != "safe":
-                self.get_logger().warning(f"Safety correction applied: {reason}")
+                # self.get_logger().warning(f"Safety adjustment: {reason}")
                 current_action = safe_action
             
             # Split and Publish
+            published_any = False
             for ctrl_name, pub in self.publishers_map.items():
                 indices = self.joint_indices[ctrl_name]
                 
                 # Safety check
                 if max(indices) >= len(current_action):
-                    self.get_logger().error(f"Action dimension ({len(current_action)}) smaller than required index ({max(indices)})")
+                    self.get_logger().error(f"Action dim mismatch for {ctrl_name}: {len(current_action)} < {max(indices)}")
                     continue
 
                 cmd_msg = Float64MultiArray()
-                cmd_msg.data = [current_action[i] for i in indices]
+                cmd_msg.data = [float(current_action[i]) for i in indices]
+                
+                # Check for "Near Zero" movement which might imply model is predicting current state
+                diff = np.abs(np.array(cmd_msg.data) - np.array([current_qpos[i] for i in indices]))
+                if np.mean(diff) < 0.001:
+                    # Very small movement, but we publish anyway to keep watchdog happy
+                    pass
+                
                 pub.publish(cmd_msg)
+                published_any = True
+                
+            if published_any:
+                self.get_logger().info(f"Pipeline Step: Latency={latency_ms:.1f}ms, Joints={len(current_action)}, Cmd[0]={current_action[0]:.3f}", throttle_duration_sec=1.0)
 
         except requests.exceptions.Timeout:
-            timeout_ms = self.config.get("pipeline", {}).get("timeout_ms", 100)
-            self.get_logger().warn(f"Pipeline timeout (latency > {timeout_ms}ms)", throttle_duration_sec=1.0)
+            self.get_logger().warn("Pipeline timeout", throttle_duration_sec=2.0)
         except requests.exceptions.RequestException as e:
-            self.get_logger().error(f"Pipeline communication error: {e}", throttle_duration_sec=5.0)
+            self.get_logger().error(f"Pipeline connection error: {e}", throttle_duration_sec=5.0)
         except Exception as e:
-            self.get_logger().error(f"Unexpected error in control_loop: {e}", throttle_duration_sec=1.0)
+            self.get_logger().error(f"Loop error: {e}", throttle_duration_sec=1.0)
+            import traceback
+            self.get_logger().error(traceback.format_exc(), throttle_duration_sec=5.0)
 
 def main():
     rclpy.init()
