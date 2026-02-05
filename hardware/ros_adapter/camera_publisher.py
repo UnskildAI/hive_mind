@@ -12,6 +12,7 @@ import cv2
 import sys
 
 
+class CameraPublisher(Node):
     def __init__(self, device_id=0, fps=30, view=True):
         super().__init__('camera_publisher')
         
