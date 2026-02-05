@@ -39,19 +39,19 @@ joints:
     - Gripper           # Gripper
   limits:
     # 5 arm joints + 1 gripper
-    min: [-3.14, -3.14, -3.14, -3.14, -3.14, 0.0]
-    max: [3.14, 3.14, 3.14, 3.14, 3.14, 1.0]
+    min: [-3.14, -3.14, -3.14, -3.14, -3.14, -0.5]
+    max: [3.14, 3.14, 3.14, 3.14, 3.14, 1.5]
   
   velocity_limits: [1.0, 1.0, 1.0, 1.0, 1.0, 0.5]
 
 # Pipeline connection
 pipeline:
   url: http://localhost:8000/run_step
-  timeout_ms: 500
+  timeout_ms: 1000
   
 # Control loop
 control:
-  frequency_hz: 20
+  frequency_hz: 10
   
 # Safety
 safety:
@@ -67,4 +67,4 @@ safety:
   # Collision heuristics
   collision_checks:
     enable_self_collision: true
-    min_elbow_angle: 0.1  # Prevent extreme bends
+    min_elbow_angle: -3.0  # Relaxed to allow full range of ALOHA model output

@@ -12,8 +12,7 @@ import cv2
 import sys
 
 
-class CameraPublisher(Node):
-    def __init__(self, device_id=0, fps=30):
+    def __init__(self, device_id=0, fps=30, view=True):
         super().__init__('camera_publisher')
         
         # Create publisher
@@ -21,6 +20,7 @@ class CameraPublisher(Node):
         
         # Initialize CV Bridge
         self.bridge = CvBridge()
+        self.show_view = view
         
         # Open camera with V4L2 backend specifically for Linux
         self.cap = cv2.VideoCapture(device_id, cv2.CAP_V4L2)
@@ -45,6 +45,8 @@ class CameraPublisher(Node):
         
         self.get_logger().info(f"Camera opened: {width}x{height} @ {actual_fps} FPS")
         self.get_logger().info(f"Publishing to /camera/image_raw")
+        if self.show_view:
+            self.get_logger().info("Live visualization ENABLED. Press 'q' in the window to quit (though node will stay running).")
         
         # Create timer for publishing
         timer_period = 1.0 / fps
@@ -58,6 +60,16 @@ class CameraPublisher(Node):
         if not ret:
             self.get_logger().warn("Failed to read frame from camera", throttle_duration_sec=1.0)
             return
+        
+        # Show visualization if enabled
+        if self.show_view:
+            cv2.imshow("Robot Camera Feed", frame)
+            # Short wait for GUI events
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                self.get_logger().info("User closed window via 'q' key")
+                # We don't exit the node, just could hide window or stop showing
+                self.show_view = False
+                cv2.destroyAllWindows()
         
         # Convert BGR to RGB (OpenCV uses BGR by default)
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -78,7 +90,9 @@ class CameraPublisher(Node):
             self.get_logger().error(f"Error converting/publishing frame: {e}")
 
     def destroy_node(self):
-        self.cap.release()
+        if self.cap.isOpened():
+            self.cap.release()
+        cv2.destroyAllWindows()
         super().destroy_node()
 
 
@@ -96,7 +110,13 @@ def main(args=None):
     # Parse only known args to avoid conflicts with ROS args
     parsed_args, _ = parser.parse_known_args()
     
-    node = CameraPublisher(device_id=parsed_args.device, fps=parsed_args.fps)
+    # Add view argument manually if not handled by known_args nicely
+    parser.add_argument('--view', dest='view', action='store_true')
+    parser.add_argument('--no-view', dest='view', action='store_false')
+    parser.set_defaults(view=True)
+    parsed_args, _ = parser.parse_known_args()
+    
+    node = CameraPublisher(device_id=parsed_args.device, fps=parsed_args.fps, view=parsed_args.view)
     
     try:
         rclpy.spin(node)
