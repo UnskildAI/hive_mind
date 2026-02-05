@@ -202,25 +202,51 @@ class ACTActionExpert(ActionExpertBase):
         Returns:
             Observation dictionary
         """
-        # Convert robot state to tensor
+        # Prepare observation dict (standard LeRobot 0.4.x keys)
+        # Note: 'observation.state' is usually used for proprioception (qpos)
         qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
-        qvel = torch.tensor(robot.joint_velocities, dtype=torch.float32).unsqueeze(0).to(self.device)
         
-        # Add task embedding as additional observation
+        observation = {}
+        
+        # Determine proprioception key (usually 'observation.state')
+        state_key = "observation.state"
+        if hasattr(self.policy.config, "state_features"):
+            # If multiple state features are defined, this might be more complex
+            pass
+        
+        observation[state_key] = qpos
+        
+        # Add task embedding if needed (custom for our orchestrator if model supports it)
+        # Most standard LeRobot models don't take a goal embedding this way, 
+        # they take it as a 'task' string during select_action if they are goal-conditioned.
+        # But for now, we'll keep it as a backup key.
         task_emb = torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
+        observation["task_embedding"] = task_emb
         
-        # Prepare observation dict (ACT format)
-        observation = {
-            "qpos": qpos,  # Joint positions
-            "qvel": qvel,  # Joint velocities
-            "task_embedding": task_emb,  # Task goal from VLM
-        }
+        # Handle Images
+        # Traceback showed KeyError: 'observation.images.top'
+        # We need to find what image keys the model expects
+        image_keys = []
+        if hasattr(self.policy.config, "image_features"):
+            image_keys = self.policy.config.image_features
+        elif hasattr(self.policy.config, "input_features"):
+            # Some versions use input_features for everything
+            image_keys = [k for k in self.policy.config.input_features if "image" in k]
         
-        # If perception has images, add them
+        if not image_keys:
+            # Fallback if we can't find keys in config
+            image_keys = ["observation.images.top", "observation.image"]
+            
+        # If perception has images, add them to ALL expected keys
         if hasattr(perception, 'raw_image') and perception.raw_image is not None:
             # Convert image to tensor
-            image_tensor = self._image_to_tensor(perception.raw_image)
-            observation["image"] = image_tensor.unsqueeze(0).to(self.device)
+            image_tensor = self._image_to_tensor(perception.raw_image).unsqueeze(0).to(self.device)
+            
+            for key in image_keys:
+                observation[key] = image_tensor
+                logger.debug(f"Assigned image to key: {key}")
+        else:
+            logger.warning("No image found in perception state for ACT observation")
         
         return observation
     

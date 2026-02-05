@@ -140,12 +140,34 @@ class Pi0ActionExpert(ActionExpertBase):
     def _prepare_observation(self, task, perception, robot) -> Dict[str, torch.Tensor]:
         """Prepare observation for Pi0 policy."""
         qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
-        task_emb = torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
         
-        return {
-            "qpos": qpos,
-            "task_embedding": task_emb,
+        observation = {
+            "observation.state": qpos,
+            "task_embedding": torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
         }
+        
+        # Determine image keys from config if available
+        image_keys = ["observation.images.top", "observation.image"]
+        if self.policy is not None and hasattr(self.policy, "config"):
+            if hasattr(self.policy.config, "image_features"):
+                image_keys = self.policy.config.image_features
+            elif hasattr(self.policy.config, "input_features"):
+                image_keys = [k for k in self.policy.config.input_features if "image" in k]
+                
+        # Map available image to all requested keys
+        if hasattr(perception, 'raw_image') and perception.raw_image is not None:
+            image_np = perception.raw_image
+            if image_np.dtype == np.uint8:
+                image_np = image_np.astype(np.float32) / 255.0
+            if image_np.ndim == 3 and image_np.shape[2] == 3:
+                image_np = np.transpose(image_np, (2, 0, 1))
+            
+            image_tensor = torch.from_numpy(image_np).float().unsqueeze(0).to(self.device)
+            
+            for key in image_keys:
+                observation[key] = image_tensor
+                
+        return observation
     
     def get_model_info(self) -> Dict[str, Any]:
         """Get Pi0 policy metadata."""
