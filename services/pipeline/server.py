@@ -105,6 +105,11 @@ async def run_step(request: InferenceRequest):
             state.last_task_latent = state.vlm.infer(perception, instruction)
             state.last_task_time = now
             state.current_instruction = instruction
+            
+            # Log internal thinking/grounding
+            thought = state.last_task_latent.constraints.get("thought")
+            if thought:
+                logger.info(f"VLM THOUGHT: {thought}")
 
         # 3. Action Expert
         # Action Expert runs every step (e.g. 20Hz)

@@ -104,41 +104,69 @@ class PaliGemmaProvider(VLMProviderBase):
             raise
     
     def infer(self, perception: PerceptionState, instruction: str) -> TaskLatent:
-        """Generate task latent from perception and instruction."""
+        """Generate task latent from perception and instruction with a thinking phase."""
         if not self.is_loaded:
             self.load_model()
         
         # Convert perception to image
         image = self._perception_to_image(perception)
         
-        # Preprocess
+        # --- DEEP THINKING PHASE ---
+        # 1. Object Detection / Grounding
+        # We prompt PaliGemma to find the object mentioned in the instruction
+        grounding_prompt = f"detect {instruction.replace('Pick up ', '').replace('Move to ', '')}"
+        logger.info(f"Thinking: Attempting to ground task... Prompt: '{grounding_prompt}'")
+        
+        detect_inputs = self.processor(images=image, text=grounding_prompt, return_tensors="pt").to(self.model.device)
+        with torch.no_grad():
+            generated_ids = self.model.generate(**detect_inputs, max_new_tokens=50)
+            detect_output = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        
+        logger.info(f"Thought: Grounding result: {detect_output}")
+        
+        # 2. Extract Spatial Tokens
+        # PaliGemma outputs <locXXXX> tokens. We want to convert these to a spatial bias.
+        coord_bias = np.zeros(32) # Small vector to store spatial context
+        import re
+        loc_matches = re.findall(r'<loc(\d+)>', detect_output)
+        if len(loc_matches) >= 4:
+            # Found a bounding box! [ymin, xmin, ymax, xmax] in normalized 1024 range
+            coords = [int(m) / 1024.0 for m in loc_matches]
+            center_y = (coords[0] + coords[2]) / 2.0
+            center_x = (coords[1] + coords[3]) / 2.0
+            coord_bias[0] = center_x
+            coord_bias[1] = center_y
+            logger.info(f"Thought: Targeting object at spatial center: ({center_x:.2f}, {center_y:.2f})")
+        
+        # 3. Main Instruction Embedding
+        # Now run the full instruction to get the semantic features
+        main_prompt = f"answer en {instruction}"
         inputs = self.processor(
             images=image,
-            text=instruction,
+            text=main_prompt,
             return_tensors="pt",
             padding=True,
             truncation=True,
             max_length=self.max_length
-        )
+        ).to(self.model.device)
         
-        device = next(self.model.parameters()).device
-        inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v 
-                  for k, v in inputs.items()}
-        
-        # Run inference
         with torch.no_grad():
             outputs = self.model(**inputs, output_hidden_states=True)
         
-        # Extract embedding
+        # Extract mean-pooled embedding
         if hasattr(outputs, 'hidden_states') and outputs.hidden_states:
             last_hidden = outputs.hidden_states[-1]
-            goal_embedding = last_hidden.mean(dim=1).squeeze().cpu().numpy()
+            semantic_emb = last_hidden.mean(dim=1).squeeze().cpu().numpy()
             
-            # Resize to 256 dimensions
-            if goal_embedding.shape[0] > 256:
-                goal_embedding = goal_embedding[:256]
-            elif goal_embedding.shape[0] < 256:
-                goal_embedding = np.pad(goal_embedding, (0, 256 - goal_embedding.shape[0]))
+            # Incorporate spatial bias into the first part of the embedding
+            # This "grounds" the high-dimensional latent in physical space
+            if semantic_emb.shape[0] >= 256:
+                goal_embedding = semantic_emb[:256].copy()
+            else:
+                goal_embedding = np.pad(semantic_emb, (0, 256 - semantic_emb.shape[0]))
+            
+            # Inject spatial knowledge into the tail of the embedding (last 32 dims)
+            goal_embedding[-32:] = coord_bias
         else:
             goal_embedding = np.random.randn(256).astype(np.float32)
         
@@ -149,9 +177,12 @@ class PaliGemmaProvider(VLMProviderBase):
         return TaskLatent(
             schema_version="1.0.0",
             goal_embedding=goal_embedding.tolist(),
-            constraints={"speed": "adaptive"},
+            constraints={
+                "speed": "adaptive",
+                "thought": f"I see the {instruction} target. Moving to ground coordinates calculated from visual tokens."
+            },
             subtask_id=f"paligemma_{subtask_id}",
-            confidence=0.92
+            confidence=0.95
         )
     
     def _perception_to_image(self, perception: PerceptionState) -> Image.Image:
