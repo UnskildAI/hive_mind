@@ -204,7 +204,9 @@ class ACTActionExpert(ActionExpertBase):
         """
         # Prepare observation dict (standard LeRobot 0.4.x keys)
         # Note: 'observation.state' is usually used for proprioception (qpos)
-        qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
+        # Match model dtype (Half, BFloat16, etc.)
+        model_dtype = getattr(self.policy, "dtype", torch.float32)
+        qpos = torch.tensor(robot.joint_position, dtype=model_dtype).unsqueeze(0).to(self.device)
         
         observation = {}
         
@@ -216,31 +218,25 @@ class ACTActionExpert(ActionExpertBase):
         
         observation[state_key] = qpos
         
-        # Add task embedding if needed (custom for our orchestrator if model supports it)
-        # Most standard LeRobot models don't take a goal embedding this way, 
-        # they take it as a 'task' string during select_action if they are goal-conditioned.
-        # But for now, we'll keep it as a backup key.
-        task_emb = torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
+        # Add task embedding if needed
+        task_emb = torch.tensor(task.goal_embedding, dtype=model_dtype).unsqueeze(0).to(self.device)
         observation["task_embedding"] = task_emb
         
         # Handle Images
-        # Traceback showed KeyError: 'observation.images.top'
-        # We need to find what image keys the model expects
         image_keys = []
         if hasattr(self.policy.config, "image_features"):
             image_keys = self.policy.config.image_features
         elif hasattr(self.policy.config, "input_features"):
-            # Some versions use input_features for everything
             image_keys = [k for k in self.policy.config.input_features if "image" in k]
         
         if not image_keys:
-            # Fallback if we can't find keys in config
             image_keys = ["observation.images.top", "observation.image"]
             
         # If perception has images, add them to ALL expected keys
         if hasattr(perception, 'raw_image') and perception.raw_image is not None:
-            # Convert image to tensor
+            # Convert image to tensor and cast to model dtype
             image_tensor = self._image_to_tensor(perception.raw_image).unsqueeze(0).to(self.device)
+            image_tensor = image_tensor.to(model_dtype)
             
             for key in image_keys:
                 observation[key] = image_tensor

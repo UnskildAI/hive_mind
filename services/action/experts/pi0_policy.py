@@ -139,11 +139,12 @@ class Pi0ActionExpert(ActionExpertBase):
     
     def _prepare_observation(self, task, perception, robot) -> Dict[str, torch.Tensor]:
         """Prepare observation for Pi0 policy."""
-        qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
+        model_dtype = getattr(self.policy, "dtype", torch.float32)
+        qpos = torch.tensor(robot.joint_position, dtype=model_dtype).unsqueeze(0).to(self.device)
         
         observation = {
             "observation.state": qpos,
-            "task_embedding": torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
+            "task_embedding": torch.tensor(task.goal_embedding, dtype=model_dtype).unsqueeze(0).to(self.device)
         }
         
         # Determine image keys from config if available
@@ -162,7 +163,7 @@ class Pi0ActionExpert(ActionExpertBase):
             if image_np.ndim == 3 and image_np.shape[2] == 3:
                 image_np = np.transpose(image_np, (2, 0, 1))
             
-            image_tensor = torch.from_numpy(image_np).float().unsqueeze(0).to(self.device)
+            image_tensor = torch.from_numpy(image_np).to(dtype=model_dtype).unsqueeze(0).to(self.device)
             
             for key in image_keys:
                 observation[key] = image_tensor
