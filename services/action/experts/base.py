@@ -96,3 +96,16 @@ class ActionExpertBase(ABC):
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    def _to_device_and_dtype(self, data: Any, device: str, dtype: Any) -> Any:
+        """Recursively move tensors in a nested structure to device and dtype."""
+        import torch
+        if isinstance(data, torch.Tensor):
+            return data.to(device=device, dtype=dtype)
+        if isinstance(data, dict):
+            return {k: self._to_device_and_dtype(v, device, dtype) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._to_device_and_dtype(v, device, dtype) for v in data]
+        if isinstance(data, tuple):
+            return tuple(self._to_device_and_dtype(v, device, dtype) for v in data)
+        return data

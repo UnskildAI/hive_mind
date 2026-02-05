@@ -202,51 +202,47 @@ class ACTActionExpert(ActionExpertBase):
         Returns:
             Observation dictionary
         """
-        # Prepare observation dict (standard LeRobot 0.4.x keys)
-        # Note: 'observation.state' is usually used for proprioception (qpos)
-        # Match model dtype (Half, BFloat16, etc.)
+        # Determine model precision
         try:
             model_dtype = next(self.policy.parameters()).dtype
         except (StopIteration, AttributeError):
             model_dtype = torch.float32
             
-        qpos = torch.tensor(robot.joint_position, dtype=model_dtype).unsqueeze(0).to(self.device)
+        # Create standard tensors
+        qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
         
         observation = {}
         
-        # Determine proprioception key (usually 'observation.state')
-        state_key = "observation.state"
-        if hasattr(self.policy.config, "state_features"):
-            # If multiple state features are defined, this might be more complex
-            pass
+        # Redundant keys for proprioception to avoid KeyErrors or silent defaults
+        # Standard LeRobot/Aloha keys
+        observation["observation.state"] = qpos
+        observation["state"] = qpos
+        observation["qpos"] = qpos
         
-        observation[state_key] = qpos
-        
-        # Add task embedding if needed
-        task_emb = torch.tensor(task.goal_embedding, dtype=model_dtype).unsqueeze(0).to(self.device)
+        # Add task embedding as observation key (might be used by latent projector)
+        task_emb = torch.tensor(task.goal_embedding, dtype=torch.float32).unsqueeze(0).to(self.device)
         observation["task_embedding"] = task_emb
         
         # Handle Images
         image_keys = []
-        if hasattr(self.policy.config, "image_features"):
-            image_keys = self.policy.config.image_features
-        elif hasattr(self.policy.config, "input_features"):
-            image_keys = [k for k in self.policy.config.input_features if "image" in k]
+        if self.policy is not None and hasattr(self.policy, "config"):
+            if hasattr(self.policy.config, "image_features"):
+                image_keys = self.policy.config.image_features
+            elif hasattr(self.policy.config, "input_features"):
+                image_keys = [k for k in self.policy.config.input_features if "image" in k]
         
         if not image_keys:
             image_keys = ["observation.images.top", "observation.image"]
             
-        # If perception has images, add them to ALL expected keys
         if hasattr(perception, 'raw_image') and perception.raw_image is not None:
-            # Convert image to tensor and cast to model dtype
             image_tensor = self._image_to_tensor(perception.raw_image).unsqueeze(0).to(self.device)
-            image_tensor = image_tensor.to(model_dtype)
-            
             for key in image_keys:
                 observation[key] = image_tensor
-                logger.debug(f"Assigned image to key: {key}")
         else:
             logger.warning("No image found in perception state for ACT observation")
+        
+        # FINAL STEP: Forces EVERYTHING in the batch to match the model's device and dtype
+        observation = self._to_device_and_dtype(observation, self.device, model_dtype)
         
         return observation
     
