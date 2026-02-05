@@ -233,13 +233,32 @@ class ACTActionExpert(ActionExpertBase):
         # Create standard tensors
         joint_positions = robot.joint_position
         
-        # SHAPE FIX: Pad robot state (6) to match model state_dim (usually 14 for ALOHA)
-        expected_state_dim = getattr(self.policy.config, "state_dim", len(joint_positions))
+        # SHAPE FIX: Dynamically find the expected state dimension from the model's layers
+        expected_state_dim = 14 # Fallback for ALOHA
+        
+        # In LeRobot 0.4.x, ACTPolicy often has the model attribute, or layers at top level
+        probe_target = None
+        if hasattr(self.policy, "model"):
+            probe_target = self.policy.model
+        else:
+            probe_target = self.policy
+            
+        if hasattr(probe_target, "encoder_robot_state_input_proj"):
+            expected_state_dim = probe_target.encoder_robot_state_input_proj.in_features
+            logger.info(f"Detected expected state dim from encoder_robot_state_input_proj: {expected_state_dim}")
+        elif hasattr(self.policy.config, "input_shapes"):
+            # Try to find it in input_shapes dict
+            state_shape = self.policy.config.input_shapes.get("observation.state")
+            if state_shape:
+                expected_state_dim = state_shape[0]
+                logger.info(f"Detected expected state dim from config.input_shapes: {expected_state_dim}")
+        
         if len(joint_positions) < expected_state_dim:
             logger.warning(f"Robot state dim ({len(joint_positions)}) < model expected ({expected_state_dim}). Padding with zeros.")
+            # Use numpy for padding
             padded_qpos = np.zeros(expected_state_dim, dtype=np.float32)
             padded_qpos[:len(joint_positions)] = joint_positions
-            joint_positions = padded_qpos
+            joint_positions = padded_qpos.tolist()
         elif len(joint_positions) > expected_state_dim:
             logger.warning(f"Robot state dim ({len(joint_positions)}) > model expected ({expected_state_dim}). Truncating.")
             joint_positions = joint_positions[:expected_state_dim]
