@@ -51,7 +51,8 @@ pipeline:
   
 # Control loop
 control:
-  frequency_hz: 10
+  frequency_hz: 8  # Reduced from 10 to give serial read/write 125ms breathing room
+  smoothing_alpha: 0.2  # Heavy smoothing (0.2 new, 0.8 old) to prevent jerkiness
   
 # Safety
 safety:

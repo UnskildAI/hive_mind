@@ -34,6 +34,8 @@ class RobotAdapter(Node):
         self.latest_image = None
         self.latest_joint = None
         self.step_count = 0
+        self.last_published_action = None
+        self.smoothing_alpha = self.config.get("control", {}).get("smoothing_alpha", 0.3)
         
         topics = self.config.get("topics", {})
         self.create_subscription(
@@ -156,6 +158,17 @@ class RobotAdapter(Node):
                 return
                 
             current_action = actions[0] # [First Step]
+            
+            # MOTION SMOOTHING (EMA Filter)
+            if self.last_published_action is not None:
+                # alpha * new + (1-alpha) * old
+                smoothed_action = []
+                for i in range(len(current_action)):
+                    val = self.smoothing_alpha * current_action[i] + (1 - self.smoothing_alpha) * self.last_published_action[i]
+                    smoothed_action.append(val)
+                current_action = smoothed_action
+            
+            self.last_published_action = current_action
             # self.get_logger().info(f"Model action (first step): {current_action}")
             
             # SAFETY VALIDATION
@@ -186,9 +199,9 @@ class RobotAdapter(Node):
                 point = JointTrajectoryPoint()
                 point.positions = [float(current_action[i]) for i in indices]
                 
-                # Smooth interpolation: Assume 0.1s to reach next point 
-                # (Matches 10Hz control frequency)
-                point.time_from_start.nanosec = 100000000 # 100ms
+                # Smooth interpolation: Assume 0.25s to reach next point 
+                # (Overlapping with 8Hz control to ensure buttery transitions)
+                point.time_from_start.nanosec = 250000000 # 250ms
                 
                 cmd_msg.points = [point]
                 
