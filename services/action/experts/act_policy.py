@@ -205,7 +205,11 @@ class ACTActionExpert(ActionExpertBase):
         # Prepare observation dict (standard LeRobot 0.4.x keys)
         # Note: 'observation.state' is usually used for proprioception (qpos)
         # Match model dtype (Half, BFloat16, etc.)
-        model_dtype = getattr(self.policy, "dtype", torch.float32)
+        try:
+            model_dtype = next(self.policy.parameters()).dtype
+        except (StopIteration, AttributeError):
+            model_dtype = torch.float32
+            
         qpos = torch.tensor(robot.joint_position, dtype=model_dtype).unsqueeze(0).to(self.device)
         
         observation = {}

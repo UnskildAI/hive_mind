@@ -125,7 +125,11 @@ class DiffusionActionExpert(ActionExpertBase):
     
     def _prepare_observation(self, task, perception, robot) -> Dict[str, torch.Tensor]:
         """Prepare observation for Diffusion policy."""
-        model_dtype = getattr(self.policy, "dtype", torch.float32)
+        try:
+            model_dtype = next(self.policy.parameters()).dtype
+        except (StopIteration, AttributeError):
+            model_dtype = torch.float32
+            
         qpos = torch.tensor(robot.joint_position, dtype=model_dtype).unsqueeze(0).to(self.device)
         
         observation = {
