@@ -172,6 +172,12 @@ class ACTActionExpert(ActionExpertBase):
                     actions_np = action_pred.cpu().numpy()
                 else:
                     actions_np = np.array(action_pred)
+                
+                # SHAPE FIX: Truncate actions from model dimension (14) back to robot dimension (6)
+                num_robot_joints = len(robot.joint_position)
+                if actions_np.shape[-1] > num_robot_joints:
+                    logger.debug(f"Truncating predicted actions from {actions_np.shape[-1]} to {num_robot_joints}")
+                    actions_np = actions_np[..., :num_robot_joints]
             except Exception as e:
                 logger.error(f"ACT model forward pass failed: {e}")
                 raise
@@ -220,16 +226,25 @@ class ACTActionExpert(ActionExpertBase):
         # Determine model precision
         try:
             model_dtype = next(self.policy.parameters()).dtype
-            # Peek at a few parameters to be sure
-            params = list(self.policy.parameters())
-            logger.info(f"Model precision check: param[0]={params[0].dtype}, param[-1]={params[-1].dtype}")
+            logger.info(f"ACT model detected dtype: {model_dtype}")
         except (StopIteration, AttributeError):
             model_dtype = torch.float32
             
-        logger.info(f"ACT model detected dtype: {model_dtype} on device: {self.device}")
-            
         # Create standard tensors
-        qpos = torch.tensor(robot.joint_position, dtype=torch.float32).unsqueeze(0).to(self.device)
+        joint_positions = robot.joint_position
+        
+        # SHAPE FIX: Pad robot state (6) to match model state_dim (usually 14 for ALOHA)
+        expected_state_dim = getattr(self.policy.config, "state_dim", len(joint_positions))
+        if len(joint_positions) < expected_state_dim:
+            logger.warning(f"Robot state dim ({len(joint_positions)}) < model expected ({expected_state_dim}). Padding with zeros.")
+            padded_qpos = np.zeros(expected_state_dim, dtype=np.float32)
+            padded_qpos[:len(joint_positions)] = joint_positions
+            joint_positions = padded_qpos
+        elif len(joint_positions) > expected_state_dim:
+            logger.warning(f"Robot state dim ({len(joint_positions)}) > model expected ({expected_state_dim}). Truncating.")
+            joint_positions = joint_positions[:expected_state_dim]
+            
+        qpos = torch.tensor(joint_positions, dtype=torch.float32).unsqueeze(0).to(self.device)
         
         observation = {}
         
@@ -262,19 +277,12 @@ class ACTActionExpert(ActionExpertBase):
         else:
             logger.warning("No image found in perception state for ACT observation")
             
-        # CRITICAL FIX: Explicitly provide the latent sample to avoid internal Float32 defaults
-        # The latent_dim is usually in self.policy.config.latent_dim
+        # Optional: latent_sample (some ACT versions need it pre-allocated)
         latent_dim = getattr(self.policy.config, "latent_dim", 32)
-        bs = 1
-        observation["latent_sample"] = torch.zeros((bs, latent_dim), device=self.device, dtype=model_dtype)
+        observation["latent_sample"] = torch.zeros((1, latent_dim), device=self.device, dtype=torch.float32)
         
         # FINAL STEP: Recursive cast EVERYTHING to model precision
         observation = self._to_device_and_dtype(observation, self.device, model_dtype)
-        
-        # Deep debug log dtypes
-        for k, v in observation.items():
-            if isinstance(v, torch.Tensor):
-                logger.info(f"Observation Tensor {k}: dtype={v.dtype}, device={v.device}")
         
         return observation
     
