@@ -78,19 +78,23 @@ class ACTActionExpert(ActionExpertBase):
         
         try:
             # Import LeRobot ACT policy (0.4.x API)
-            from lerobot.policies.act import ACTConfig
+            from lerobot.policies.act.modeling_act import ACTPolicy, ACTConfig
             import torch
             
             logger.info(f"Loading ACT from: {checkpoint_path}")
             
-            # For now, create a simple placeholder since we don't have a real checkpoint
-            # In production, you would load from HF Hub or local path
-            logger.warning("ACT policy loading from HF Hub not yet implemented in this version")
-            logger.warning("Using placeholder policy for testing")
+            # Load policy from pretrained checkpoint
+            # In LeRobot 0.4.x, we usually use from_pretrained on the Policy class
+            self.policy = ACTPolicy.from_pretrained(
+                checkpoint_path,
+            )
             
-            # Create a minimal config for testing
-            config = ACTConfig()
-            self.policy = None  # Placeholder
+            # Move to device and set precision
+            torch_dtype = self.gpu_manager.get_torch_dtype(self.precision)
+            self.policy.to(device=self.device, dtype=torch_dtype)
+            
+            # Set to eval mode
+            self.policy.eval()
             
             self.is_loaded = True
             
@@ -100,10 +104,17 @@ class ACTActionExpert(ActionExpertBase):
             logger.info(f"  Control mode: {self.control_mode}")
         
         except ImportError as e:
-            logger.error("LeRobot not installed or ACT policy not available")
-            logger.error(f"Error: {e}")
-            logger.warning("Falling back to placeholder policy")
-            self.policy = None
+            logger.error(f"LeRobot 0.4.3 import error: {e}")
+            logger.warning("Attempting alternative import for ACTPolicy...")
+            try:
+                from lerobot.policies.act.modeling_act import ACTPolicy
+                self.policy = ACTPolicy.from_pretrained(checkpoint_path)
+                self.policy.to(self.device)
+                self.policy.eval()
+                self.is_loaded = True
+            except Exception as e2:
+                logger.error(f"Fallback import also failed: {e2}")
+                self.policy = None
         except Exception as e:
             logger.error(f"Failed to load ACT policy: {e}")
             raise

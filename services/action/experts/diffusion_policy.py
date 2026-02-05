@@ -62,21 +62,30 @@ class DiffusionActionExpert(ActionExpertBase):
             raise ValueError(f"Unknown checkpoint source: {source}")
         
         try:
-            from lerobot.common.policies.diffusion import DiffusionPolicy
+            from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
             
             self.policy = DiffusionPolicy.from_pretrained(
                 checkpoint_path,
-                device=self.device,
             )
             
+            # Move to device
+            self.policy.to(self.device)
             self.policy.eval()
             self.is_loaded = True
             
             logger.info("Diffusion policy loaded successfully")
         
-        except Exception as e:
-            logger.error(f"Failed to load Diffusion policy: {e}")
-            raise
+        except ImportError:
+            logger.warning("Attempting alternative import for DiffusionPolicy...")
+            try:
+                from lerobot.policies.diffusion import DiffusionPolicy
+                self.policy = DiffusionPolicy.from_pretrained(checkpoint_path)
+                self.policy.to(self.device)
+                self.policy.eval()
+                self.is_loaded = True
+            except Exception as e2:
+                logger.error(f"Failed to load Diffusion policy: {e2}")
+                raise
     
     def act(
         self,

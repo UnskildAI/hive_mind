@@ -105,14 +105,17 @@ class SafetyValidator:
                 self.violations["velocity_limits"] += 1
                 violations.append("velocity_limits_exceeded")
         
-        # Check 4: Basic Collision Heuristics (example: prevent extreme elbow bend)
+        # Check 4: Basic Collision Heuristics (prevent extreme arm folding)
         if self.collision_checks.get("enable_self_collision", False):
-            # Example: Check if elbow joint is too close to base (simple heuristic)
+            # SoArm 100: Elbow is joint index 2. 
+            # In many configurations, 0.0 is straight, and extreme negative/positive is folding.
+            # We want to prevent the arm from hitting the base.
             if len(clamped_positions) >= 3:
-                elbow_angle = clamped_positions[2]  # Elbow joint
-                if abs(elbow_angle) < self.collision_checks.get("min_elbow_angle", 0.1):
+                elbow_angle = clamped_positions[2]
+                min_angle = self.collision_checks.get("min_elbow_angle", -2.5) # Allow straighter positions
+                if elbow_angle < min_angle:
                     self.violations["collision"] += 1
-                    violations.append("potential_self_collision")
+                    violations.append(f"potential_self_collision: elbow ({elbow_angle:.3f}) < {min_angle}")
         
         # Decision
         if violations:

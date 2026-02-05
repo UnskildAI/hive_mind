@@ -29,30 +29,43 @@ python scripts/test_vla_inference.py --action act
 python scripts/test_vla_inference.py --vlm openvla --action act
 ```
 
-## 🤖 Real Robot Deployment (SoArm 100)
+## 📷 Real Robot Deployment & Feed Flow (SoArm 100)
 
-### 1. Start the VLA Pipeline Server
-This loads the VLM and Action Expert models on your GPUs.
+### 1. Start the Camera Publisher
+This node reads frames from `/dev/video0` and publishes them to the ROS topic `/camera/image_raw`.
+```bash
+# Terminal 0
+cd /home/mecha/hive_mind/hardware/ros_adapter
+./start_camera.sh
+```
+
+### 2. Start the VLA Pipeline Server
+This loads the models and exposes an HTTP API for inference.
 ```bash
 # Terminal 1
 cd /home/mecha/hive_mind
 python services/pipeline/server.py
 ```
 
-### 2. Start the ROS Adapter
-Connects the VLA pipeline to your robot's ROS2 topics.
+### 3. Start the ROS Adapter
+The adapter is the bridge. It subscribes to ROS images, sends them to the Pipeline Server via HTTP, and returns robot actions.
 ```bash
 # Terminal 2
 cd /home/mecha/hive_mind
 python hardware/ros_adapter/ros_node.py
 ```
 
-### 3. Give the Robot a Task
-Use the helper script to send a natural language command.
+### 🧠 How the VLM gets your feed:
+1. **Camera Publisher**: Captures frame → Publishes to `/camera/image_raw`.
+2. **ROS Adapter**: Subscribes to `/camera/image_raw` → Converts frame to **Base64** → HTTP POST to Pipeline Server.
+3. **Pipeline Server**: Decodes Base64 → Passes image to **VLM (PaliGemma/OpenVLA)** for perception.
+
+---
+
+### 4. Give the Robot a Task
 ```bash
 # Terminal 3
-cd /home/mecha/hive_mind
-python scripts/set_instruction.py "Pick up the red cube and place it in the blue box"
+python scripts/set_instruction.py "Pick up the red cube"
 ```
 
 ---

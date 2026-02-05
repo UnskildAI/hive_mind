@@ -64,19 +64,23 @@ class Pi0ActionExpert(ActionExpertBase):
             raise ValueError(f"Unknown checkpoint source: {source}")
         
         try:
-            # Try to import Pi0 from lerobot
-            # Note: Pi0 may not be in lerobot yet, this is a placeholder
+            # Try to import Pi0 from lerobot 0.4.x
             try:
-                from lerobot.common.policies.pi0 import Pi0Policy
+                from lerobot.policies.pi0.modeling_pi0 import Pi0Policy
                 
                 self.policy = Pi0Policy.from_pretrained(
                     checkpoint_path,
-                    device=self.device,
                 )
+                self.policy.to(self.device)
             except ImportError:
-                logger.warning("Pi0Policy not found in lerobot, using placeholder")
-                # Placeholder: use a simple policy
-                self.policy = None
+                logger.warning("Pi0Policy not found in lerobot.policies.pi0, checking lerobot.policies...")
+                try:
+                    from lerobot.policies import pi0
+                    # If it's a module, it might have a factory or direct access
+                    self.policy = None # Placeholder for now as Pi0 is often more complex to load
+                except ImportError:
+                    logger.warning("Pi0Policy not found, using placeholder")
+                    self.policy = None
             
             self.is_loaded = True
             
