@@ -153,7 +153,6 @@ class ACTActionExpert(ActionExpertBase):
         if self.policy is None:
             logger.warning("ACT policy not loaded, returning zero actions")
             # Return zero actions as placeholder
-            import numpy as np
             actions_np = np.zeros((self.horizon, len(robot.joint_position)))
         else:
             # Run ACT forward pass
