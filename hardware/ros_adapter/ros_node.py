@@ -196,19 +196,27 @@ class RobotAdapter(Node):
                 cmd_msg = JointTrajectory()
                 cmd_msg.joint_names = [self.all_joint_names[i] for i in indices]
                 
-                point = JointTrajectoryPoint()
-                point.positions = [float(current_action[i]) for i in indices]
+                # Point 1: START (Exactly where the robot is RIGHT NOW)
+                # This ensures the trajectory is continuous from the actual hardware state
+                start_point = JointTrajectoryPoint()
+                start_point.positions = [float(current_qpos[i]) for i in indices]
+                start_point.time_from_start.nanosec = 0
                 
-                # Smooth interpolation: Assume 0.25s to reach next point 
-                # (Overlapping with 8Hz control to ensure buttery transitions)
-                point.time_from_start.nanosec = 250000000 # 250ms
+                # Point 2: GOAL (Where we want it to be in one loop period)
+                goal_point = JointTrajectoryPoint()
+                goal_point.positions = [float(current_action[i]) for i in indices]
                 
-                cmd_msg.points = [point]
+                # Match interpolation time to the loop period exactly
+                # For 10Hz (100ms), we set 100ms.
+                # If we want it even smoother, we can use 150ms to slightly overlap.
+                period_ms = int((1.0 / self.config.get("control", {}).get("frequency_hz", 10)) * 1000)
+                goal_point.time_from_start.nanosec = period_ms * 1000000 
+                
+                cmd_msg.points = [start_point, goal_point]
                 
                 # Check for "Near Zero" movement
-                diff = np.abs(np.array(point.positions) - np.array([current_qpos[i] for i in indices]))
+                diff = np.abs(np.array(goal_point.positions) - np.array(start_point.positions))
                 if np.mean(diff) < 0.001:
-                    # Very small movement, but we publish anyway to keep watchdog happy
                     pass
                 
                 pub.publish(cmd_msg)
