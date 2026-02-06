@@ -21,12 +21,12 @@ vlm:
 
 # Action Expert Selection
 action_expert:
-  provider: "act"  # Options: act, diffusion, pi0, pi0_fast, scripted (legacy), frozen_policy (legacy)
+  provider: "pi0"  # Options: act, diffusion, pi0, pi0_fast, scripted (legacy), frozen_policy (legacy)
   
   checkpoint:
     source: "local"
-    repo_id: "lerobot/act_aloha_sim_insertion_human"  # Placeholder, ignored when source is local
-    local_path: "/home/workstation/ACT-Pick"
+    repo_id: "lerobot/pi0"  # Placeholder
+    local_path: "/home/workstation/PI0-Pick"
     revision: "main"
   
   # GPU Configuration

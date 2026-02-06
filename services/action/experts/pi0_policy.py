@@ -75,13 +75,21 @@ class Pi0ActionExpert(ActionExpertBase):
             except ImportError:
                 logger.warning("Pi0Policy not found in lerobot.policies.pi0, checking lerobot.policies...")
                 try:
-                    from lerobot.policies import pi0
-                    # If it's a module, it might have a factory or direct access
-                    self.policy = None # Placeholder for now as Pi0 is often more complex to load
+                    from lerobot.policies.pi0.modeling_pi0 import Pi0Policy # Retry in case of path issues
+                    self.policy = Pi0Policy.from_pretrained(checkpoint_path)
+                    self.policy.to(self.device)
                 except ImportError:
                     logger.warning("Pi0Policy not found, using placeholder")
                     self.policy = None
             
+            # Update horizon from model config if available
+            if self.policy and hasattr(self.policy, "config") and hasattr(self.policy.config, "chunk_size"):
+                self.horizon = self.policy.config.chunk_size
+                logger.info(f"Updated horizon from model config: {self.horizon}")
+            elif self.policy and hasattr(self.policy, "config") and hasattr(self.policy.config, "horizon"):
+                self.horizon = self.policy.config.horizon
+                logger.info(f"Updated horizon from model config: {self.horizon}")
+
             self.is_loaded = True
             
             logger.info("Pi0 policy loaded successfully")
