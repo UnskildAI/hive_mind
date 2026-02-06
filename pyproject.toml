@@ -25,6 +25,7 @@ dependencies = [
     "einops>=0.7.0",             # Tensor operations
     "sentencepiece>=0.2.0",      # Tokenization
     "protobuf>=4.25.0",          # Model serialization
+    "timm>=1.0.24",
 ]
 
 [build-system]
