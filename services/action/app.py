@@ -16,27 +16,18 @@ app = FastAPI()
 
 import os
 
-# Load config
-with open("services/action/config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-
-# Priority: Env Var > Config File > Default
-mode = os.getenv("ACTION_MODE", config.get("mode", "learned"))
-
-# Initialize controller based on mode
+# Initialize controller using factory
+from services.action.factory import ActionExpertFactory
 try:
-    if mode == "scripted":
-        policy = ScriptedController(config)
-        logger.info("ScriptedController initialized.")
-    elif mode == "frozen_policy":
-        policy = FrozenPolicy(config)
-        logger.info("FrozenPolicy initialized.")
-    elif mode == "act":
-        policy = ACTPolicy(config)
-        logger.info("ACTPolicy initialized.")
+    # Use master_config.yaml if it exists
+    master_config_path = "configs/master_config.yaml"
+    if os.path.exists(master_config_path):
+        policy = ActionExpertFactory.create(master_config_path)
     else:
-        policy = ActionExpert("services/action/config.yaml")
-        logger.info("Action Expert (ML) initialized.")
+        # Fallback to local config.yaml
+        policy = ActionExpertFactory.create("services/action/config.yaml")
+    
+    logger.info(f"Action Policy '{type(policy).__name__}' initialized.")
 except Exception as e:
     logger.error(f"Failed to initialize controller: {e}")
     raise e

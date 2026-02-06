@@ -24,9 +24,9 @@ action_expert:
   provider: "act"  # Options: act, diffusion, pi0, pi0_fast, scripted (legacy), frozen_policy (legacy)
   
   checkpoint:
-    source: "huggingface"
-    repo_id: "lerobot/act_aloha_sim_insertion_human"  # Example ACT checkpoint
-    local_path: null
+    source: "local"
+    repo_id: "lerobot/act_aloha_sim_insertion_human"  # Placeholder, ignored when source is local
+    local_path: "/home/workstation/ACT-Pick"
     revision: "main"
   
   # GPU Configuration
